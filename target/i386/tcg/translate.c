@@ -503,15 +503,30 @@ static inline void gen_op_add_reg(DisasContext *s, MemOp size, int reg, TCGv val
     gen_op_mov_reg_v(s, size, reg, s->tmp0);
 }
 
+// static inline void gen_op_ld_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
+// {
+//     tcg_gen_qemu_ld_tl(t0, a0, s->mem_index, idx | MO_LE);
+// }
+
+// static inline void gen_op_st_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
+// {
+//     tcg_gen_qemu_st_tl(t0, a0, s->mem_index, idx | MO_LE);
+// }
 static inline void gen_op_ld_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
 {
+    /* SDA instrumentation: detect if address/expression a0 is symbolic.
+       Pass current pc as a TCG constant (tl = target/host-sized). */
+    gen_helper_sym_ld(tcg_env, a0, tcg_constant_tl(s->pc));
     tcg_gen_qemu_ld_tl(t0, a0, s->mem_index, idx | MO_LE);
 }
 
 static inline void gen_op_st_v(DisasContext *s, int idx, TCGv t0, TCGv a0)
 {
+    /* SDA instrumentation before store */
+    gen_helper_sym_st(tcg_env, a0, tcg_constant_tl(s->pc));
     tcg_gen_qemu_st_tl(t0, a0, s->mem_index, idx | MO_LE);
 }
+
 
 static void gen_update_eip_next(DisasContext *s)
 {
@@ -1162,17 +1177,37 @@ static inline void gen_jcc1_noeob(DisasContext *s, int b, TCGLabel *l1)
    value 'b'. In the fast case, T0 is guaranteed not to be used.
    One or both of the branches will call gen_jmp_rel, so ensure
    cc_op is clean.  */
+// static inline void gen_jcc1(DisasContext *s, int b, TCGLabel *l1)
+// {
+//     CCPrepare cc = gen_prepare_cc(s, b, NULL);
+
+//     gen_update_cc_op(s);
+//     if (cc.use_reg2) {
+//         tcg_gen_brcond_tl(cc.cond, cc.reg, cc.reg2, l1);
+//     } else {
+//         tcg_gen_brcondi_tl(cc.cond, cc.reg, cc.imm, l1);
+//     }
+// }
+
 static inline void gen_jcc1(DisasContext *s, int b, TCGLabel *l1)
 {
     CCPrepare cc = gen_prepare_cc(s, b, NULL);
 
     gen_update_cc_op(s);
+
+    /* SCB instrumentation: check if branch condition operand is symbolic.
+       We pass the 'condition register' (cc.reg) and the current pc. */
     if (cc.use_reg2) {
+        /* If condition uses two regs, we consider cc.reg as the tested value */
+        gen_helper_sym_branch(tcg_env, cc.reg, tcg_constant_tl(s->pc));
         tcg_gen_brcond_tl(cc.cond, cc.reg, cc.reg2, l1);
     } else {
+        gen_helper_sym_branch(tcg_env, cc.reg, tcg_constant_tl(s->pc));
         tcg_gen_brcondi_tl(cc.cond, cc.reg, cc.imm, l1);
     }
 }
+
+
 
 /* XXX: does not work with gdbstub "ice" single step - not a
    serious problem.  The caller can jump to the returned label
@@ -1730,6 +1765,7 @@ static void gen_ld_modrm(CPUX86State *env, DisasContext *s, int modrm, MemOp ot)
         gen_op_mov_v_reg(s, ot, s->T0, rm);
     } else {
         gen_lea_modrm(env, s, modrm);
+        gen_helper_sym_ld(tcg_env, s->A0, tcg_constant_tl(s->pc));
         gen_op_ld_v(s, ot, s->T0, s->A0);
     }
 }
@@ -1745,6 +1781,7 @@ static void gen_st_modrm(CPUX86State *env, DisasContext *s, int modrm, MemOp ot)
         gen_op_mov_reg_v(s, ot, rm, s->T0);
     } else {
         gen_lea_modrm(env, s, modrm);
+        gen_helper_sym_st(tcg_env, s->A0, tcg_constant_tl(s->pc));
         gen_op_st_v(s, ot, s->T0, s->A0);
     }
 }

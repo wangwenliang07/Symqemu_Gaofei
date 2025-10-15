@@ -3,6 +3,7 @@ i386_ss.add(files(
   'cpu.c',
   'gdbstub.c',
   'helper.c',
+  'sym_helper.c',
   'xsave_helper.c',
   'cpu-dump.c',
 ))
