@@ -443,7 +443,7 @@ void tcg_gen_mov_i32(TCGv_i32 ret, TCGv_i32 arg)
     tcg_gen_mov_i32_internal(ret, arg, false);
 }
 
-void tcg_gen_mov_i32_concrete(TCGv_i32 ret, TCGv_i32 arg)
+static void tcg_gen_mov_i32_concrete(TCGv_i32 ret, TCGv_i32 arg)
 {
     tcg_gen_mov_i32_internal(ret, arg, true);
 }
